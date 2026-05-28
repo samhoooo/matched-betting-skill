@@ -1,0 +1,14 @@
+# Tracker files — never commit personal betting data
+*.xlsx
+*.xls
+*.csv
+
+# Config file with local paths
+.matched_betting_config
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
