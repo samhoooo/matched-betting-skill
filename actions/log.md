@@ -100,40 +100,61 @@ echo "<resolved_path>" > ~/.matched_betting_config
 | L   | Lay Stake    | **Formula**| Auto-calculated — do NOT overwrite          |
 | M   | Liability    | **Formula**| Auto-calculated — do NOT overwrite          |
 | N   | Profit       | £ number   | Enter once settled (positive or negative)   |
-| O   | Notes        | Text       | Promo details, status (Pending/Settled)     |
+| O   | Notes        | Text       | Promo details, status, Matchbook offer ID   |
 
 **Never write to L or M** — they contain spreadsheet formulas.
 
 ## Logging a New Bet
 
-**Step 1 — Extract fields** from the user's message or screenshot:
+### From workflow state (preferred)
+
+When running as part of the Place Bet workflow, all fields should already be in `workflow_state`. Map them:
+
+| Column | Source |
+|--------|--------|
+| A (Date) | Today's date |
+| B (Bookmaker) | `workflow_state.bookmaker` |
+| C (Exchange) | "Matchbook" |
+| D (Sport) | `workflow_state.sport` |
+| E (Event) | `workflow_state.event` + selection details |
+| F (Match Date) | `workflow_state.match_date` |
+| G (Offer Type) | `workflow_state.bet_type` |
+| H (Back Stake) | `workflow_state.back_stake` |
+| I (Back Odds) | `workflow_state.back_odds` |
+| J (Lay Odds) | `workflow_state.lay_odds` |
+| K (Commission %) | `workflow_state.commission` (default 0) |
+| N (Profit) | Leave blank (pending settlement) |
+| O (Notes) | "Pending — Matchbook offer #[offer_id]" |
+
+### From manual input
+
+If running standalone (not from workflow), extract fields from the user's message or screenshot:
 - **Required**: Bookmaker, Sport, Event, Match Date, Offer Type, Back Stake, Back Odds, Lay Odds
 - **Optional / defaultable**: Date (placed), Exchange, Commission %, Notes
-- **Settle only**: Profit
 
 If any required field is missing or ambiguous, ask before writing.
 
-**Step 2 — Confirm** before writing:
+### Confirm before writing
 
 ```
 Ready to log:
-• Date: 2026-05-04
+• Date: 2026-06-07
 • Bookmaker: Bet365
 • Exchange: Matchbook
 • Sport: Football
 • Event: Arsenal vs Man City — BTTS
-• Match Date: 2026-05-05
+• Match Date: 2026-06-08
 • Offer Type: Free Bet
 • Back Stake: £10.00
 • Back Odds: 2.10
 • Lay Odds: 2.14
 • Commission: 0%
-• Notes: £10 free bet from sign-up offer
+• Notes: Pending — Matchbook offer #413177013410013
 
 Shall I add this?
 ```
 
-**Step 3 — Write** to the next empty row (columns A–K, N–O only):
+### Write to tracker
 
 ```bash
 tracker_path=$(cat ~/.matched_betting_config)
@@ -172,12 +193,12 @@ wb.save("/tmp/tracker_edit.xlsx")
 cp /tmp/tracker_edit.xlsx "$tracker_path"
 ```
 
-**Step 4 — Confirm** to the user which row was added.
+Confirm to the user which row was added.
 
 ## Settling a Bet
 
 1. Ask for (or extract): Event name + Profit amount
-2. Read config and copy tracker to `/tmp/tracker_edit.xlsx` (same as Step 3 above)
+2. Read config and copy tracker to `/tmp/tracker_edit.xlsx` (same as above)
 3. Find the row by matching column E (Event) or Date + Bookmaker
 4. Confirm which row was found before editing
 5. Write profit to column N; optionally update Notes (column O) to "Settled"
@@ -188,9 +209,7 @@ cp /tmp/tracker_edit.xlsx "$tracker_path"
 | Screenshot type | Look for |
 |-----------------|----------|
 | Bookmaker       | Stake → Back Stake; Odds → Back Odds; Event/match → Event; Sport type → Sport; Branding → Bookmaker; Promo label → Offer Type |
-| Exchange        | Lay odds → Lay Odds; Exchange name → Exchange |
-
-Always confirm extracted values with the user before logging.
+| Back bet slip   | Confirmed stake, odds, selection — verify against planned values |
 
 ## Common Offer Types
 

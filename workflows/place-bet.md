@@ -1,6 +1,6 @@
 # Workflow: Place a Bet
 
-Full end-to-end workflow for placing a new matched bet: **CALCULATE → VERIFY → LOG**.
+Full end-to-end workflow for placing a new matched bet: **EXPLORE → CALCULATE → VERIFY → PLACE BET → LOG**.
 
 Run this when the user wants to place a bet, shares a bookmaker screenshot, or says anything like "new bet", "place a bet", "I want to bet on X".
 
@@ -11,10 +11,14 @@ For each phase, load the corresponding action file — instructions below. Carry
 After each phase completes, print a short plain-text progress line in chat:
 
 ```
-Progress: [✅ Calculate] [🔄 Verify] [⏳ Log]
+Progress: [✅ Explore] [🔄 Calculate] [⏳ Verify] [⏳ Place Bet] [⏳ Log]
 ```
 
 Use ✅ for complete, 🔄 for active, ⏳ for pending, ❌ for blocked.
+
+### Matchbook session
+
+Before Phase 1, check if the Matchbook MCP session is active by calling `matchbook_balance`. If it returns an error, ask the user for credentials and call `matchbook_login`. Do this once — subsequent phases reuse the session.
 
 ### Workflow state
 
@@ -22,63 +26,96 @@ Collect fields as you go and carry them forward — never re-ask for something a
 
 ```
 workflow_state = {
-  # From Phase 1 (CALCULATE)
-  "bookmaker":   ...,
-  "sport":       ...,
-  "event":       ...,
-  "match_date":  ...,
-  "offer_type":  ...,
-  "bet_type":    ...,   # Qualifying / Free Bet SNR / Free Bet SR / Money Back
-  "back_stake":  ...,
-  "back_odds":   ...,
-  "lay_odds":    ...,   # may be updated in Phase 2 after exchange screenshot
-  "commission":  ...,
-  "lay_stake":   ...,   # calculated
-  "liability":   ...,   # calculated
+  # From Phase 1 (EXPLORE)
+  "bookmaker":       ...,
+  "sport":           ...,
+  "event":           ...,
+  "match_date":      ...,
+  "bet_type":        ...,   # Qualifying / Free Bet SNR / Free Bet SR / Money Back
+  "offer_terms":     ...,   # T&Cs of the offer
+  "matchbook_event_id":  ...,
+  "matchbook_market_id": ...,
+  "matchbook_runner_id": ...,
+  "runner_name":     ...,
+  "available_lay_prices": [...],  # from MCP
+  "recommendation":  ...,   # agent's recommended approach
 
-  # From Phase 2 (VERIFY)
-  "back_selection": ...,
-  "lay_selection":  ...,
-  "selections_match": True/False,
-  "exchange":    ...,
+  # From Phase 2 (CALCULATE)
+  "back_stake":      ...,
+  "back_odds":       ...,
+  "lay_odds":        ...,   # from Matchbook MCP (live)
+  "lay_available":   ...,   # liquidity at best lay price
+  "commission":      ...,   # default 0% for Matchbook
+  "lay_stake":       ...,   # calculated
+  "liability":       ...,   # calculated
 
-  # From Phase 3 (LOG)
-  "row_logged":  ...,
+  # From Phase 3 (VERIFY)
+  "user_confirmed":  True/False,
+
+  # From Phase 4 (PLACE BET)
+  "offer_id":        ...,   # Matchbook offer ID
+  "offer_status":    ...,   # open/matched/delayed
+  "back_bet_placed": True/False,
+
+  # From Phase 5 (LOG)
+  "row_logged":      ...,
 }
 ```
 
 ---
 
-### Phase 1 — CALCULATE
+### Phase 1 — EXPLORE
 
-**Goal**: Collect the back bet details, determine bet type, compute lay stake and profit scenarios.
+**Goal**: Understand the event, offer, and what Matchbook has available. Provide a recommendation.
 
-Load and follow `actions/calculate.md`. At the end, show the calculation result and then prompt:
+Load and follow `actions/explore.md`. At the end, the user should understand what bet to place and at roughly what odds. Then prompt:
 
-> "✅ Calculation done. Ready to move to Phase 2 — Verify?
-> Share your exchange screenshot (or tell me the lay odds if you haven't placed the lay yet)."
+> "✅ Exploration done. Ready to move to Phase 2 — Calculate?
+> Please share a screenshot of the back bet you'd like to place (or tell me the back stake and odds)."
 
 Print progress block with Phase 1 ✅, Phase 2 🔄.
 
 ---
 
-### Phase 2 — VERIFY
+### Phase 2 — CALCULATE
 
-**Goal**: Confirm selections match and re-validate numbers against the exchange screenshot.
+**Goal**: Compute lay stake and profit scenarios using the bookmaker screenshot + live Matchbook odds.
 
-Load and follow `actions/verify.md`, but **skip re-asking for anything already in workflow_state** — pre-fill bet type, back stake, back odds from Phase 1. Only new input needed is the exchange screenshot (or confirmation of lay odds).
+Load and follow `actions/calculate.md`. The lay odds come from Matchbook MCP — do not ask the user for them. At the end, show the calculation result and prompt:
 
-If selections **don't match**: print progress block with Phase 2 ❌. Tell the user what's wrong and ask them to fix it before continuing. Do not proceed to Phase 3 until selections match.
+> "✅ Calculation done. Ready to review and confirm?"
 
-If selections **match**: show the verified summary, then prompt:
-
-> "✅ Verified. Ready to log this bet to your tracker?"
-
-Print progress block with Phase 1 ✅, Phase 2 ✅, Phase 3 🔄.
+Print progress block with Phases 1–2 ✅, Phase 3 🔄.
 
 ---
 
-### Phase 3 — LOG
+### Phase 3 — VERIFY
+
+**Goal**: Present the complete bet details for user go/no-go decision.
+
+Load and follow `actions/verify.md`. This is a confirmation gate — present all numbers clearly and wait for explicit approval. If the user says no, return to Phase 2 to adjust.
+
+If user confirms:
+
+> "✅ Confirmed. I'll now place the lay bet on Matchbook."
+
+Print progress block with Phases 1–3 ✅, Phase 4 🔄.
+
+---
+
+### Phase 4 — PLACE BET
+
+**Goal**: Place the lay bet via Matchbook MCP, then ask the user to place the back bet.
+
+Load and follow `actions/place-bet.md`. After the lay is placed and the user confirms their back bet with a screenshot, prompt:
+
+> "✅ Both bets placed. Ready to log?"
+
+Print progress block with Phases 1–4 ✅, Phase 5 🔄.
+
+---
+
+### Phase 5 — LOG
 
 **Goal**: Write the bet to the tracker.
 
@@ -86,11 +123,9 @@ Load and follow `actions/log.md`. Pre-fill **all fields from workflow_state** �
 
 > "Shall I log this?"
 
-After the user confirms and the row is written, print the final progress line with all three phases complete and confirm the row number:
+After the user confirms and the row is written, print the final progress line with all five phases complete and confirm the row number:
 
 ```
-Progress: [✅ Calculate] [✅ Verify] [✅ Log]
-🎉 Bet logged at row X!
+Progress: [✅ Explore] [✅ Calculate] [✅ Verify] [✅ Place Bet] [✅ Log]
+Bet logged at row X!
 ```
-
----

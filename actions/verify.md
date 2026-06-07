@@ -1,68 +1,87 @@
 # Action: Verify
 
-Check that back and lay screenshots match before placing, and validate the numbers.
+Present the complete bet plan for user go/no-go decision. This is the confirmation gate before real money is committed.
 
-## Step 1 — Ask for bet type
+No exchange screenshot is needed — all lay data comes from Matchbook MCP.
 
-If not already clear from screenshots:
-> "Which bet type is this?
-> 1. **Qualifying Bet**
-> 2. **Free Bet (SNR)**
-> 3. **Money Back if Bet Loses**"
+## Step 1 — Re-fetch live lay odds
 
-If the type is clearly shown (e.g. "USE MONEY BACK IN FREE BETS" banner), confirm it instead of asking.
+Call `matchbook_get_lay_odds` to get the latest price for the selected runner. Compare against the odds used in Calculate:
 
-## Step 2 — Extract values
-
-From bookmaker: Back Stake, Back Odds, Event, Back selection, Promo label, EP badge (note which legs).
-From exchange: Lay selection, Lay Odds, Exchange name, Lay Stake (if already filled by user).
-
-## Step 3 — Check selections match
-
-Back and lay selections must represent the same outcome. Flag immediately if they differ.
-
-✅ Valid: "Man City Win + BTTS" ↔ "Man City and Yes"
-❌ Flag: different teams, BTTS on one side only, Draw vs team win
-
-## Step 4 — Calculate
-
-Load `references/formulas.md` and apply the correct formula for the bet type.
-
-## Step 5 — Display full summary
+- **If odds unchanged or improved**: proceed with existing calculation.
+- **If odds have moved unfavourably**: recalculate using the new odds, flag the change.
 
 ```
-✅ / ❌  Selections match: [Back selection] ↔ [Lay selection]
-
-📊 Match rating: Back Odds ÷ Lay Odds = XX.X%
-
-📐 Calculation ([Bet Type]):
-  Lay stake required:  £X.XX
-  Liability:           £X.XX
-
-  If back wins:   £X.XX
-  If lay wins:    £X.XX  (incl. £X.XX free bet @ 78%)  ← only for Money Back
-
-💡 Suggestions:
-  [see Suggestions Checklist below]
+⚠️ Lay odds have moved since calculation:
+  Was: X.XX → Now: X.XX
+  Updated lay stake: £X.XX (was £X.XX)
+  Updated profit: if back wins £X.XX / if lay wins £X.XX
 ```
 
-## Step 6 — Suggestions Checklist
+## Step 2 — Check balance
 
-*(Canonical copy — also inlined in `actions/calculate.md`)*
+Call `matchbook_balance` and verify the user has enough free funds to cover the liability.
 
-Always check and comment on all of these:
+- **Sufficient**: show balance info quietly in the summary.
+- **Insufficient**: flag clearly and stop.
 
-1. **Match rating** — ≥ 90% excellent ✅ | 85–89% acceptable ✅ | < 85% flag and suggest lower lay odds
-2. **Commission** — if c > 0%, show effective match rating = `(Back Odds ÷ Lay Odds) × (1 - c)`
-3. **Liability** — if large relative to profit, mention the exchange balance needed
-4. **Lay liquidity** — remind user to check there's enough volume at those odds before placing
-5. **EP (Early Payout) badge** — on Bet Builders: EP on some legs doesn't trigger early payout for the whole bet (cleaner for matched betting). On single bets: flag timing mismatch risk between back and lay settlement
-6. **Lay stake field on exchange** — if blank in screenshot, remind user to enter the calculated lay stake before confirming
-7. **Free bet conversion** (Money Back only) — 78% is an estimate; aim for odds ~4–6 for a good balance of value vs variance
+```
+❌ Insufficient funds on Matchbook:
+  Liability required: £X.XX
+  Free funds available: £X.XX
+  Shortfall: £X.XX
+  → Please deposit more funds before proceeding.
+```
 
-## Clarification Prompts
+## Step 3 — Present full summary for confirmation
 
-- *"What bookmaker is this with?"*
-- *"What are the lay odds on the exchange?"*
-- *"Is this a free bet (SNR) or risk-free (stake back as free bet)?"*
-- *"What exchange are you using — Matchbook, Betfair, or something else?"*
+```
+🔍 Bet Review — Ready to place?
+
+  📋 Event:       [Event name]
+  📅 Match date:  [Date]
+  🏢 Bookmaker:   [Bookmaker]
+  🎯 Bet type:    [Qualifying / Free Bet SNR / Money Back]
+
+  BACK BET (you place on [Bookmaker]):
+    Selection:  [Selection name]
+    Stake:      £X.XX
+    Odds:       X.XX
+
+  LAY BET (I place on Matchbook):
+    Selection:  [Runner name]
+    Stake:      £X.XX
+    Odds:       X.XX  (£XX.XX available)
+    Liability:  £X.XX
+
+  📊 Match rating:  XX.X%
+  💰 Expected outcome:
+    If back wins:  £X.XX
+    If lay wins:   £X.XX
+
+  💳 Matchbook balance: £X.XX (after liability: £X.XX remaining)
+
+  ⚡ Confirm to proceed — I'll place the lay bet on Matchbook,
+     then you place the back bet on [Bookmaker].
+```
+
+## Step 4 — Wait for explicit go/no-go
+
+Do NOT proceed without clear user confirmation. Acceptable confirmations:
+- "Yes", "Go", "Confirm", "Place it", "Do it"
+
+If the user says no, asks to change something, or hesitates:
+- Offer to adjust (different odds, stake, or selection)
+- Return to Calculate if numbers need reworking
+- Return to Explore if they want a different selection entirely
+
+## Suggestions Checklist
+
+If not already covered in Calculate, check these:
+
+1. **Selections match** — back and lay selection represent the same outcome
+2. **Match rating** — ≥ 90% excellent ✅ | 85–89% acceptable ✅ | < 85% flag
+3. **Liquidity** — enough volume at the quoted lay odds for the full stake
+4. **Balance** — sufficient free funds on Matchbook
+5. **T&C compliance** — back odds meet minimum requirement, eligible market
+6. **Timing** — flag if match starts very soon (odds may shift before back bet is placed)

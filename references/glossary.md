@@ -23,3 +23,7 @@ Load this file if the user seems unfamiliar with terms, or asks for clarificatio
 | **EP (Early Payout)** | An offer where the bookmaker pays out early if a certain condition is met mid-match (e.g. your team goes 2-0 up). Can affect timing of back vs lay settlement. |
 | **Lay liquidity** | The volume of money available at a given lay price on the exchange. Low liquidity means your lay stake may not be fully matched. |
 | **Free bet conversion rate** | The expected percentage of a free bet's face value you can lock in as guaranteed profit by laying it. Typically ~78%, higher at higher odds. |
+| **Bet Builder** | A single bet combining 2+ selections from the same match (also called Same Game Multiple / SGM / Request a Bet). The bookmaker sets the combined odds. Cannot be laid directly on the exchange — you must find an equivalent lay market. |
+| **Bet Builder Helper** | An Outplayed tool that maps Bet Builder combinations to their corresponding exchange lay markets. Use it during Explore to determine what to lay on Matchbook. |
+| **Correct Score notation** | Exchange format: the first number is always the home team's score (e.g. 1-0 = home win, 0-1 = away win). Critical to get right when laying Correct Score markets. |
+| **Same Game Multiple (SGM)** | See Bet Builder — alternate name used by some bookmakers (e.g. Paddy Power, Betfair Sportsbook). |
