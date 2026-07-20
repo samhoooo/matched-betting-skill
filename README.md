@@ -35,7 +35,7 @@ matched-betting/
 
 ## Tracker
 
-The skill logs bets to a local `.xlsx` file using `openpyxl`. On first use it will ask you to create a new tracker or point to an existing one, and saves the path to `~/.matched_betting_config` for future sessions.
+The skill logs, updates, and queries bets via the **matched-betting-tracker MCP server** (`log_bet`, `update_bet`, `query_bets`), which writes directly to the tracker app's Postgres database. There's no local tracker file to manage or point to — the MCP server must be registered and connected for logging/updating/querying to work.
 
 Default exchange: **Matchbook** (0% commission). Override per bet.
 

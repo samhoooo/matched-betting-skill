@@ -58,7 +58,7 @@ workflow_state = {
   "back_bet_placed": True/False,
 
   # From Phase 5 (LOG)
-  "row_logged":      ...,
+  "bet_id_logged":   ...,
 }
 ```
 
@@ -117,15 +117,15 @@ Print progress block with Phases 1–4 ✅, Phase 5 🔄.
 
 ### Phase 5 — LOG
 
-**Goal**: Write the bet to the tracker.
+**Goal**: Write the bet to the tracker via the matched-betting-tracker MCP.
 
 Load and follow `actions/log.md`. Pre-fill **all fields from workflow_state** — the confirm prompt should require zero new input from the user. Show the pre-filled summary and ask:
 
 > "Shall I log this?"
 
-After the user confirms and the row is written, print the final progress line with all five phases complete and confirm the row number:
+After the user confirms and `log_bet` succeeds, print the final progress line with all five phases complete and confirm the bet id:
 
 ```
 Progress: [✅ Explore] [✅ Calculate] [✅ Verify] [✅ Place Bet] [✅ Log]
-Bet logged at row X!
+Bet logged — id #X!
 ```

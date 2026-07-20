@@ -1,108 +1,32 @@
 # Action: Log
 
-Log a new bet or settle an existing one in the user's tracker file.
+Log a new bet or settle an existing one using the **matched-betting-tracker MCP server**.
 
-> **Critical file access rules:**
-> 1. **Always work directly on the user's tracker file** — never ask the user to upload it, never save to an outputs folder, never use Google Drive or any cloud connector.
-> 2. **Use openpyxl via bash** — (a) `cp` the tracker to `/tmp/tracker_edit.xlsx`, (b) edit it there with openpyxl, (c) `cp` it back to the original path.
-> 3. **Never use Google Drive** — do not use any Google Drive MCP tools for this tracker.
+> **Critical rules:**
+> 1. **Always use the `matched-betting-tracker` MCP tools** (`log_bet`, `update_bet`, `query_bets`) — never create or edit a local tracker file, never use openpyxl/Excel, never use Google Drive or any cloud connector.
+> 2. `log_bet` does **not** re-derive `layStake`/`liability`/`profit` from stake/odds — it's a plain insert. Always pass the numbers already worked out (in workflow state from `actions/calculate.md`, or computed manually).
+> 3. `date`, `bookmaker`, `exchange`, `sport`, `event` are required on `log_bet` — never guess or default these; ask the user for any that are missing.
 
-## Step 0 — Resolve the tracker path
+## Bet Fields
 
-Before doing anything else, run this flow every session:
-
-**A. Read config**
-```bash
-cat ~/.matched_betting_config 2>/dev/null
-```
-
-**B. Interpret the result**
-
-| Result | Action |
-|--------|--------|
-| Path returned AND file exists at that path | Use it. Proceed silently — don't mention the config to the user. |
-| Path returned BUT file missing at that path | Tell the user: *"I couldn't find your tracker at `<path>`. Has it moved? Please share the new location."* → on reply, update config and proceed. |
-| Config missing (first-time user) | → **Run First-Time Setup** below |
-
-**C. First-Time Setup**
-
-1. Ask the user:
-   > "I don't have a tracker on file yet. Would you like me to:
-   > 1. **Create a new tracker** — I'll set it up with all the right columns
-   > 2. **Use an existing file** — share the path and I'll use that"
-
-2. **If creating new** — ask for preferred save location, suggesting `~/Documents/matched_betting_tracker.xlsx` as default. Then run:
-
-```python
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
-
-wb = Workbook()
-ws = wb.active
-ws.title = "Bets"
-
-headers = [
-    "Date", "Bookmaker", "Exchange", "Sport", "Event",
-    "Match Date", "Offer Type", "Back Stake", "Back Odds", "Lay Odds",
-    "Commission %", "Lay Stake", "Liability", "Profit", "Notes"
-]
-
-for col, header in enumerate(headers, 1):
-    cell = ws.cell(1, col, header)
-    cell.font = Font(bold=True, color="FFFFFF")
-    cell.fill = PatternFill("solid", fgColor="2E4057")
-    cell.alignment = Alignment(horizontal="center")
-
-widths = [12, 14, 12, 12, 30, 12, 16, 12, 12, 10, 14, 12, 12, 10, 30]
-for col, width in enumerate(widths, 1):
-    ws.column_dimensions[get_column_letter(col)].width = width
-
-ws.freeze_panes = "A2"
-
-for row in range(2, 1001):
-    ws.cell(row, 12).value = (
-        f"=IF(H{row}=\"\",\"\","
-        f"ROUND((H{row}*I{row})/(J{row}*(1-K{row}/100)),2))"
-    )
-    ws.cell(row, 13).value = (
-        f"=IF(L{row}=\"\",\"\","
-        f"ROUND(L{row}*(J{row}-1),2))"
-    )
-
-wb.save(tracker_path)
-```
-
-3. **If using existing file** — ask the user to share the full path. Verify it exists with `ls "<path>"` before saving.
-
-4. **Save the path to config**:
-```bash
-echo "<resolved_path>" > ~/.matched_betting_config
-```
-
-5. Confirm: *"Tracker is set up at `<path>`. I'll use this automatically from now on."*
-
-## Sheet Structure
-
-| Col | Field        | Type       | Notes                                       |
-|-----|--------------|------------|---------------------------------------------|
-| A   | Date         | YYYY-MM-DD | Date bet was placed                         |
-| B   | Bookmaker    | Text       | e.g. Bet365, William Hill                   |
-| C   | Exchange     | Text       | Default: Matchbook                          |
-| D   | Sport        | Text       | e.g. Football, Horse Racing                 |
-| E   | Event        | Text       | Match / race name, include bet details      |
-| F   | Match Date   | YYYY-MM-DD | Date the match / race takes place           |
-| G   | Offer Type   | Text       | e.g. Risk-Free, Free Bet, Enhanced Odds     |
-| H   | Back Stake   | £ number   | Amount staked at bookmaker                  |
-| I   | Back Odds    | Decimal    | Bookmaker odds (decimal)                    |
-| J   | Lay Odds     | Decimal    | Exchange lay odds (decimal)                 |
-| K   | Commission % | Number     | Exchange commission rate, default 0         |
-| L   | Lay Stake    | **Formula**| Auto-calculated — do NOT overwrite          |
-| M   | Liability    | **Formula**| Auto-calculated — do NOT overwrite          |
-| N   | Profit       | £ number   | Enter once settled (positive or negative)   |
-| O   | Notes        | Text       | Promo details, status, Matchbook offer ID   |
-
-**Never write to L or M** — they contain spreadsheet formulas.
+| MCP param    | Type          | Notes                                                |
+|--------------|---------------|-------------------------------------------------------|
+| `date`       | YYYY-MM-DD    | Date bet was placed. Required.                       |
+| `bookmaker`  | Text          | e.g. Bet365, William Hill. Required.                  |
+| `exchange`   | Text          | Default: Matchbook. Required.                         |
+| `sport`      | Text          | e.g. Football, Horse Racing. Required.                |
+| `event`      | Text          | Match / race name, include bet details. Required.     |
+| `match_date` | YYYY-MM-DD    | Date the match / race takes place.                    |
+| `offer_type` | Text          | e.g. Risk-Free, Free Bet, Enhanced Odds.               |
+| `settled`    | bool          | Default `false` when logging a new bet.               |
+| `back_stake` | £ number      | Amount staked at bookmaker.                            |
+| `back_odds`  | Decimal       | Bookmaker odds (decimal).                              |
+| `lay_odds`   | Decimal       | Exchange lay odds (decimal).                           |
+| `commission` | Number        | Exchange commission rate, default 0.                   |
+| `lay_stake`  | £ number      | Pass the value already calculated — not re-derived.    |
+| `liability`  | £ number      | Pass the value already calculated — not re-derived.    |
+| `profit`     | £ number      | Leave 0/unset until settled.                            |
+| `notes`      | Text          | Promo details, status, Matchbook offer ID.              |
 
 ## Logging a New Bet
 
@@ -110,29 +34,32 @@ echo "<resolved_path>" > ~/.matched_betting_config
 
 When running as part of the Place Bet workflow, all fields should already be in `workflow_state`. Map them:
 
-| Column | Source |
-|--------|--------|
-| A (Date) | Today's date |
-| B (Bookmaker) | `workflow_state.bookmaker` |
-| C (Exchange) | "Matchbook" |
-| D (Sport) | `workflow_state.sport` |
-| E (Event) | `workflow_state.event` + selection details |
-| F (Match Date) | `workflow_state.match_date` |
-| G (Offer Type) | `workflow_state.bet_type` |
-| H (Back Stake) | `workflow_state.back_stake` |
-| I (Back Odds) | `workflow_state.back_odds` |
-| J (Lay Odds) | `workflow_state.lay_odds` |
-| K (Commission %) | `workflow_state.commission` (default 0) |
-| N (Profit) | Leave blank (pending settlement) |
-| O (Notes) | "Pending — Matchbook offer #[offer_id]" |
+| `log_bet` param | Source |
+|------------------|--------|
+| `date` | Today's date |
+| `bookmaker` | `workflow_state.bookmaker` |
+| `exchange` | "Matchbook" |
+| `sport` | `workflow_state.sport` |
+| `event` | `workflow_state.event` + selection details |
+| `match_date` | `workflow_state.match_date` |
+| `offer_type` | `workflow_state.bet_type` |
+| `settled` | `false` |
+| `back_stake` | `workflow_state.back_stake` |
+| `back_odds` | `workflow_state.back_odds` |
+| `lay_odds` | `workflow_state.lay_odds` |
+| `commission` | `workflow_state.commission` (default 0) |
+| `lay_stake` | `workflow_state.lay_stake` |
+| `liability` | `workflow_state.liability` |
+| `profit` | Leave unset (pending settlement) |
+| `notes` | "Pending — Matchbook offer #[offer_id]" |
 
 ### From manual input
 
 If running standalone (not from workflow), extract fields from the user's message or screenshot:
 - **Required**: Bookmaker, Sport, Event, Match Date, Offer Type, Back Stake, Back Odds, Lay Odds
-- **Optional / defaultable**: Date (placed), Exchange, Commission %, Notes
+- **Optional / defaultable**: Date (placed), Exchange, Commission %, Lay Stake, Liability, Notes
 
-If any required field is missing or ambiguous, ask before writing.
+If any required field is missing or ambiguous, ask before writing. If lay stake / liability aren't already known, calculate them first (see `references/formulas.md`) rather than leaving them at 0.
 
 ### Confirm before writing
 
@@ -149,60 +76,30 @@ Ready to log:
 • Back Odds: 2.10
 • Lay Odds: 2.14
 • Commission: 0%
+• Lay Stake: £9.81
+• Liability: £11.19
 • Notes: Pending — Matchbook offer #413177013410013
 
 Shall I add this?
 ```
 
-### Write to tracker
+### Write via MCP
 
-```bash
-tracker_path=$(cat ~/.matched_betting_config)
-cp "$tracker_path" /tmp/tracker_edit.xlsx
-```
+Call `log_bet` with the fields above. It returns the inserted row as JSON, including its `id` — mention that id when confirming to the user (needed later to settle the bet).
 
-```python
-from openpyxl import load_workbook
+If the tool result contains an `"error"` key instead of a row, report the error to the user rather than treating it as success (e.g. `matched-betting-tracker` MCP not connected, or a missing required field).
 
-wb = load_workbook("/tmp/tracker_edit.xlsx")
-ws = wb.active
-next_row = next(
-    (r for r in range(2, ws.max_row + 2) if ws.cell(r, 1).value is None),
-    ws.max_row + 1
-)
-
-ws.cell(next_row, 1).value = date
-ws.cell(next_row, 2).value = bookmaker
-ws.cell(next_row, 3).value = exchange
-ws.cell(next_row, 4).value = sport
-ws.cell(next_row, 5).value = event
-ws.cell(next_row, 6).value = match_date
-ws.cell(next_row, 7).value = offer_type
-ws.cell(next_row, 8).value = back_stake
-ws.cell(next_row, 9).value = back_odds
-ws.cell(next_row, 10).value = lay_odds
-ws.cell(next_row, 11).value = commission
-# Skip L (12) and M (13) — formulas
-ws.cell(next_row, 14).value = profit or None
-ws.cell(next_row, 15).value = notes
-
-wb.save("/tmp/tracker_edit.xlsx")
-```
-
-```bash
-cp /tmp/tracker_edit.xlsx "$tracker_path"
-```
-
-Confirm to the user which row was added.
+Confirm to the user which bet was logged, including its id.
 
 ## Settling a Bet
 
-1. Ask for (or extract): Event name + Profit amount
-2. Read config and copy tracker to `/tmp/tracker_edit.xlsx` (same as above)
-3. Find the row by matching column E (Event) or Date + Bookmaker
-4. Confirm which row was found before editing
-5. Write profit to column N; optionally update Notes (column O) to "Settled"
-6. Save and copy back to the original path
+1. Ask for (or extract): Event name + Profit amount (and Date placed / Bookmaker if useful for disambiguation).
+2. Call `query_bets` with `settled="false"` (and `sport`/`bookmaker`/`date_from`/`date_to` filters if known) to find candidate bets.
+3. Match the target bet by its `event` field (and date/bookmaker) in the results. If more than one match, list them and ask the user which `id` to settle.
+4. Confirm which bet (id + event) was found before editing.
+5. Call `update_bet` with `id`, `profit`, `settled=true`, and optionally `notes="Settled"`.
+
+If the tool result contains an `"error"` key, report it to the user (e.g. no bet found with that id).
 
 ## Field Extraction from Screenshots
 

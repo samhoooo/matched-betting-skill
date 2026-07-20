@@ -30,6 +30,18 @@ This skill uses the **Matchbook MCP server** (`matchbook`) for live exchange dat
 
 **Session check:** Before any MCP call, try `matchbook_balance`. If it fails with a session error, ask the user for their Matchbook credentials and call `matchbook_login`.
 
+## Matched-Betting-Tracker MCP Integration
+
+This skill uses the **matched-betting-tracker MCP server** (`matched-betting-tracker`) to log, update, and query bets — it writes directly to the tracker app's Postgres database. There is no local tracker file and no config path to resolve. The following MCP tools are available:
+
+| MCP Tool     | Purpose                                                            |
+|--------------|---------------------------------------------------------------------|
+| `log_bet`    | Insert a new bet record. `date`, `bookmaker`, `exchange`, `sport`, `event` are required — never guess these. |
+| `update_bet` | Partial update of an existing bet by `id` (e.g. to settle it). Only the fields passed are changed. |
+| `query_bets` | List bets, optionally filtered by `sport`/`bookmaker`/`exchange`/`settled`/`date_from`/`date_to`, capped by `limit` (default 50). |
+
+**Note:** `log_bet` does not re-derive `layStake`/`liability`/`profit` from stake/odds — always pass the numbers already worked out in `actions/calculate.md`.
+
 ## Entry points
 
 | Entry point          | When to use |
@@ -46,8 +58,8 @@ This skill uses the **Matchbook MCP server** (`matchbook`) for live exchange dat
 | `actions/calculate.md` | Individual calculate, or workflow Phase 2 |
 | `actions/verify.md` | Individual verify, or workflow Phase 3 |
 | `actions/place-bet.md` | Individual place bet, or workflow Phase 4 |
-| `actions/log.md` | Individual log/settle, or workflow Phase 5 |
-| `actions/update.md` | Auto-settling past bets |
+| `actions/log.md` | Individual log/settle, or workflow Phase 5 — uses the matched-betting-tracker MCP |
+| `actions/update.md` | Auto-settling past bets — uses the matched-betting-tracker MCP |
 | `references/formulas.md` | Calculating lay stakes, liability, or profit (loaded from within action files) |
 | `references/glossary.md` | Domain term definitions — load if user seems unfamiliar or asks for clarification |
 | `references/bet-builder-helper.md` | Bet Builder methodology: how to find the lay market for a Bet Builder using the Outplayed tool, common mappings, correct score notation, and offer types. Load whenever the user mentions a Bet Builder, SGM, Same Game Multiple, or Request a Bet. |
@@ -72,5 +84,5 @@ Override per-row if the user specifies otherwise.
 - `actions/calculate.md` — Compute lay stake and profit scenarios (auto-fetches lay odds from Matchbook)
 - `actions/verify.md` — Present lay stake and odds for user go/no-go decision
 - `actions/place-bet.md` — Place the lay bet via Matchbook MCP, prompt user to place back bet
-- `actions/log.md` — Record a new bet or settle an existing one; includes tracker setup
+- `actions/log.md` — Record a new bet or settle an existing one via the matched-betting-tracker MCP
 - `actions/update.md` — Auto-settle past bets: scan, search results, write profit/loss
